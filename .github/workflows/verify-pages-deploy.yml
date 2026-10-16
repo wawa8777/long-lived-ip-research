@@ -16,29 +16,40 @@ jobs:
     if: ${{ github.event_name == 'push' || github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
     steps:
-      - name: Wait for production deployment and confirm HTML is live
+      - name: Diagnose production response and confirm HTML is live
         run: |
           set -euo pipefail
           SITE="https://long-lived-ip-research.pages.dev"
           EXPECTED='assets/images/one-piece.jpg assets/images/pokemon.png assets/images/hello-kitty.jpg assets/images/snoopy.jpg assets/images/ultraman.png assets/images/simpsons.jpg assets/images/shinchan.png'
           PASS=0
-          for attempt in $(seq 1 30); do
-            if curl -fsSL --max-time 20 "${SITE}/?verify=${GITHUB_RUN_ID}-${attempt}" -o /tmp/live-index.html; then
-              ALL_FOUND=1
-              for item in $EXPECTED; do
-                if ! grep -Fq "$item" /tmp/live-index.html; then ALL_FOUND=0; break; fi
-              done
-              if [ "$ALL_FOUND" -eq 1 ] && ! grep -Fq '這一版尚未將圖片二進位檔下載' /tmp/live-index.html; then
-                PASS=1
-                echo "LIVE_HTML_CONFIRMED attempt=$attempt"
-                break
+          for attempt in $(seq 1 12); do
+            code=$(curl -sSL --max-time 20 -w '%{http_code}' "${SITE}/?verify=${GITHUB_RUN_ID}-${attempt}" -o /tmp/live-index.html || true)
+            bytes=$(wc -c < /tmp/live-index.html 2>/dev/null || echo 0)
+            title=$(grep -o '<title>[^<]*' /tmp/live-index.html 2>/dev/null | head -1 || true)
+            echo "ATTEMPT=$attempt HTTP=$code BYTES=$bytes TITLE=$title"
+            ALL_FOUND=1
+            MISSING=''
+            for item in $EXPECTED; do
+              if ! grep -Fq "$item" /tmp/live-index.html 2>/dev/null; then
+                ALL_FOUND=0
+                MISSING="$MISSING $item"
               fi
+            done
+            echo "MISSING_ASSET_REFERENCES=$MISSING"
+            if [ "$code" = "200" ] && [ "$ALL_FOUND" -eq 1 ] && grep -Fq '部署檢查版｜2026-10-16' /tmp/live-index.html && ! grep -Fq '這一版尚未將圖片二進位檔下載' /tmp/live-index.html; then
+              PASS=1
+              echo "LIVE_HTML_CONFIRMED attempt=$attempt"
+              break
             fi
-            echo "Deployment is not yet showing the expected HTML (attempt $attempt/30); retrying in 6 seconds."
             sleep 6
           done
           if [ "$PASS" -ne 1 ]; then
-            echo "Live HTML does not yet match the expected production assets."
+            echo "FINAL_RESPONSE_DIAGNOSTICS:"
+            [ ! -f /tmp/live-index.html ] || {
+              grep -o '<title>[^<]*' /tmp/live-index.html | head -1 || true
+              grep -o 'assets/images/[^" ]*' /tmp/live-index.html | sort -u | head -20 || true
+              head -c 700 /tmp/live-index.html || true
+            }
             exit 1
           fi
       - name: Verify all seven public image URLs return image content
