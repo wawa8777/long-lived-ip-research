@@ -104,10 +104,13 @@ jobs:
                   path = out / name
                   path.write_bytes(data)
                   local_url = 'assets/images/' + name
-                  if old_url in page:
-                      page = page.replace(old_url, local_url)
+                  # Rewrite only an <img src> attribute. Preserve the clickable original-source links in the article.
+                  pattern = re.compile(r'(<img\\b[^>]*\\bsrc=["\\'])' + re.escape(old_url) + r'(["\\'])', re.I)
+                  page, replacements = pattern.subn(lambda m: m.group(1) + local_url + m.group(2), page)
+                  if replacements:
+                      print(f'UPDATED_IMAGE_SRC {preferred_name}: {replacements}')
                   else:
-                      print(f'NOTE {preferred_name}: old URL already absent from index.html; local asset refreshed as {name}')
+                      print(f'PRESERVED_SOURCE_LINKS {preferred_name}: no remote <img src> needs replacement; local asset refreshed as {name}')
                   downloaded.append((name, len(data), mime, actual_url))
               except Exception as e:
                   failures.append((preferred_name, str(e)))
