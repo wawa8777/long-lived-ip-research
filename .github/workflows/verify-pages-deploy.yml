@@ -1,0 +1,60 @@
+name: Verify production Pages images
+on:
+  workflow_run:
+    workflows: ["Vendor real case images"]
+    types: [completed]
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  verify-live-site:
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Wait for production deployment and confirm HTML is live
+        run: |
+          set -euo pipefail
+          SITE="https://long-lived-ip-research.pages.dev"
+          EXPECTED='assets/images/one-piece.jpg assets/images/pokemon.png assets/images/hello-kitty.jpg assets/images/snoopy.jpg assets/images/ultraman.png assets/images/simpsons.jpg assets/images/shinchan.png'
+          PASS=0
+          for attempt in $(seq 1 30); do
+            if curl -fsSL --max-time 20 "${SITE}/?verify=${GITHUB_RUN_ID}-${attempt}" -o /tmp/live-index.html; then
+              ALL_FOUND=1
+              for item in $EXPECTED; do
+                if ! grep -Fq "$item" /tmp/live-index.html; then ALL_FOUND=0; break; fi
+              done
+              if [ "$ALL_FOUND" -eq 1 ] && ! grep -Fq '這一版尚未將圖片二進位檔下載' /tmp/live-index.html; then
+                PASS=1
+                echo "LIVE_HTML_CONFIRMED attempt=$attempt"
+                break
+              fi
+            fi
+            echo "Deployment is not yet showing the expected HTML (attempt $attempt/30); retrying in 6 seconds."
+            sleep 6
+          done
+          if [ "$PASS" -ne 1 ]; then
+            echo "Live HTML does not yet match the expected production assets."
+            exit 1
+          fi
+      - name: Verify all seven public image URLs return image content
+        run: |
+          set -euo pipefail
+          SITE="https://long-lived-ip-research.pages.dev"
+          for item in assets/images/one-piece.jpg assets/images/pokemon.png assets/images/hello-kitty.jpg assets/images/snoopy.jpg assets/images/ultraman.png assets/images/simpsons.jpg assets/images/shinchan.png; do
+            result=$(curl -sSL --max-time 25 -o /dev/null -w '%{http_code}|%{content_type}' "${SITE}/${item}?verify=${GITHUB_RUN_ID}")
+            status="${result%%|*}"
+            mime="${result#*|}"
+            echo "$item => HTTP=$status MIME=$mime"
+            [ "$status" = "200" ]
+            case "$mime" in image/*) ;; *) echo "Not served as an image: $item"; exit 1;; esac
+          done
+      - name: Confirm visible source citations exist in deployed HTML
+        run: |
+          set -euo pipefail
+          COUNT=$(grep -o '原始圖片網址' /tmp/live-index.html | wc -l | tr -d ' ')
+          echo "Visible original-image source links: $COUNT"
+          [ "$COUNT" -ge 6 ]
+          grep -Fq 'https://one-piece.com/character/Mugiwarano_itimi/index.html' /tmp/live-index.html
+          grep -Fq 'https://www.pokemon.com/us/pokedex/25' /tmp/live-index.html
+          grep -Fq 'https://tsuburaya-prod.com/heroes/ultraman' /tmp/live-index.html
+          echo "SOURCE_CITATIONS_CONFIRMED"
