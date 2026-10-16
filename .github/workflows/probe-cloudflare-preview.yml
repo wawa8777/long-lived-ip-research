@@ -1,0 +1,34 @@
+name: Probe Cloudflare Pages production and branch preview
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/probe-cloudflare-preview.yml'
+      - 'index.html'
+      - 'assets/images/**'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  inspect-live-endpoints:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Test primary domain and documented branch-preview hostname
+        run: |
+          set -u
+          declare -A URLS
+          URLS[production]="https://long-lived-ip-research.pages.dev/"
+          URLS[main_preview]="https://main.long-lived-ip-research.pages.dev/"
+          for key in production main_preview; do
+            url="${URLS[$key]}"
+            file="/tmp/${key}.html"
+            status=$(curl -sSL --max-time 25 -w '%{http_code}' "${url}?check=${GITHUB_RUN_ID}" -o "$file" || true)
+            title=$(grep -o '<title>[^<]*' "$file" 2>/dev/null | head -1 || true)
+            size=$(wc -c < "$file" 2>/dev/null || echo 0)
+            localrefs=$(grep -o 'assets/images/[^" ]*' "$file" 2>/dev/null | sort -u | wc -l || echo 0)
+            svgrefs=$(grep -o 'assets/[^" ]*\.svg' "$file" 2>/dev/null | sort -u | wc -l || echo 0)
+            sourcecount=$(grep -o '原始圖片網址' "$file" 2>/dev/null | wc -l || echo 0)
+            echo "ENDPOINT=$key HTTP=$status BYTES=$size TITLE=$title LOCAL_IMAGE_REFS=$localrefs SVG_PLACEHOLDER_REFS=$svgrefs SOURCE_LINKS=$sourcecount"
+            image_status=$(curl -sSL --max-time 20 -o /dev/null -w '%{http_code}|%{content_type}' "${url%/}/assets/images/one-piece.jpg?check=${GITHUB_RUN_ID}" || true)
+            echo "ENDPOINT_IMAGE=$key RESULT=$image_status"
+          done
