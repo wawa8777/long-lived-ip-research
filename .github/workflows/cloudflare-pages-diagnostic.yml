@@ -1,11 +1,5 @@
 name: Diagnose and deploy Cloudflare Pages
 on:
-  push:
-    branches: [main]
-    paths:
-      - 'index.html'
-      - 'assets/images/**'
-      - '.github/workflows/cloudflare-pages-diagnostic.yml'
   workflow_dispatch:
 permissions:
   contents: read
