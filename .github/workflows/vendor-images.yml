@@ -66,5 +66,6 @@ jobs:
             echo "No new image changes to commit."
           else
             git commit -m "chore: vendor downloaded case images [skip ci]"
+            git pull --rebase origin main
             git push
           fi
