@@ -10,62 +10,125 @@ permissions:
   contents: write
 jobs:
   download-and-vendor:
-    if: "!contains(github.event.head_commit.message, '[skip ci]')"
+    if: ${{ github.actor != 'github-actions[bot]' && !contains(github.event.head_commit.message, '[skip ci]') }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-      - name: Download real image files and point site to local copies
+      - name: Download real images from reliable sources and localize references
         run: |
           python - <<'PY'
           from pathlib import Path
           from urllib.request import Request, urlopen
-          import re, sys
+          from urllib.parse import urljoin
+          from html.parser import HTMLParser
+          import mimetypes, re, sys
+
+          class ImageMetaParser(HTMLParser):
+              def __init__(self):
+                  super().__init__()
+                  self.candidates = []
+              def handle_starttag(self, tag, attrs):
+                  attrs = dict(attrs)
+                  if tag.lower() == 'meta':
+                      prop = (attrs.get('property') or attrs.get('name') or '').lower()
+                      if prop in ('og:image', 'twitter:image', 'twitter:image:src') and attrs.get('content'):
+                          self.candidates.append(attrs['content'])
+                  elif tag.lower() == 'link' and 'image_src' in (attrs.get('rel') or '').lower():
+                      if attrs.get('href'):
+                          self.candidates.append(attrs['href'])
+
           root = Path('.')
           html_path = root / 'index.html'
-          html = html_path.read_text(encoding='utf-8')
+          page = html_path.read_text(encoding='utf-8')
           out = root / 'assets' / 'images'
           out.mkdir(parents=True, exist_ok=True)
+
+          # old_url is the image URL currently in index.html; source_url is where to obtain the real image.
           images = [
-            ('shinchan.png', 'https://www.tv-asahi.co.jp/shinchan/common-img/main_sp.png'),
-            ('one-piece.jpg', 'https://one-piece.com/o/assets/images/anime/character/data/giolla/img.jpg'),
-            ('pokemon.png', 'https://sg.portal-pokemon.com/play/resources/pokedex/img/pm/2b3f6ff00db7a1efae21d85cfb8995eaff2da8d8.png'),
-            ('hello-kitty.jpg', 'https://spice.eplus.jp/images/BoDsdSSRojSPpe0TRY0mnLdmAa3xrhqKzEbP22SJxzX2ayIGy4DDrkJ393WAWNpG/'),
-            ('snoopy.jpg', 'https://ian.marieclaire.com.tw/assets/mc/202312/658A7F4B20D531703575371.jpeg?format=jpg&t=sc&w=1200%2C675'),
-            ('ultraman.jpg', 'https://www.bizhankook.com/upload/bk/article/201611/thumb/12014-19044-sampleM.jpg'),
-            ('simpsons.jpg', 'https://sire-media-star.techops.disn.io/generic/photogallery-photo/64/160994.custom.jpg'),
+            ('one-piece.jpg', 'https://one-piece.com/o/assets/images/anime/character/data/giolla/img.jpg', 'https://one-piece.com/character/Mugiwarano_itimi/index.html'),
+            ('pokemon.png', 'https://sg.portal-pokemon.com/play/resources/pokedex/img/pm/2b3f6ff00db7a1efae21d85cfb8995eaff2da8d8.png', 'https://assets.pokemon.com/assets/cms2/img/pokedex/full/025.png'),
+            ('ultraman.jpg', 'https://www.bizhankook.com/upload/bk/article/201611/thumb/12014-19044-sampleM.jpg', 'https://tsuburaya-prod.com/heroes/ultraman'),
           ]
-          success = 0
-          for name, url in images:
-            path = out / name
-            try:
-              req = Request(url, headers={'User-Agent':'Mozilla/5.0 (compatible; ResearchSite/1.0)'})
-              with urlopen(req, timeout=30) as response:
-                data = response.read()
-                mime = response.headers.get('Content-Type','').lower()
-              if len(data) < 1000 or not mime.startswith('image/'):
-                raise ValueError(f'not a valid image: MIME={mime}, bytes={len(data)}')
-              path.write_bytes(data)
-              html = html.replace(url, 'assets/images/' + name)
-              print(f'DOWNLOADED {name}: {len(data)} bytes ({mime})')
-              success += 1
-            except Exception as e:
-              print(f'FAILED {name}: {e}')
-          # Keep any unavailable source URL intact, and never claim that failed downloads are local.
-          html_path.write_text(html, encoding='utf-8')
-          print(f'IMAGE_DOWNLOAD_COUNT={success}/{len(images)}')
-          if success == 0:
-            sys.exit('No images downloaded; refusing to commit a false success.')
+
+          def request(url, referer=None):
+              headers = {
+                  'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/128 Safari/537.36',
+                  'Accept': 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8',
+              }
+              if referer:
+                  headers['Referer'] = referer
+              req = Request(url, headers=headers)
+              with urlopen(req, timeout=35) as response:
+                  return response.read(), response.headers.get('Content-Type', '').split(';')[0].lower(), response.geturl()
+
+          def real_image(source_url):
+              data, mime, final_url = request(source_url)
+              if mime.startswith('image/') and len(data) > 1000:
+                  return data, mime, final_url
+              text = data.decode('utf-8', errors='replace')
+              parser = ImageMetaParser()
+              parser.feed(text)
+              candidates = []
+              for candidate in parser.candidates:
+                  candidate = urljoin(final_url, candidate.strip())
+                  if candidate not in candidates:
+                      candidates.append(candidate)
+              # Some official pages expose hero art only as an img src.
+              if not candidates:
+                  for candidate in re.findall(r'<img[^>]+(?:src|data-src)=["\']([^"\']+)["\']', text, flags=re.I):
+                      candidate = urljoin(final_url, candidate)
+                      if candidate not in candidates and not re.search(r'(logo|icon|avatar|sprite|favicon)', candidate, re.I):
+                          candidates.append(candidate)
+              errors = []
+              for candidate in candidates[:12]:
+                  try:
+                      img, img_mime, final_img_url = request(candidate, referer=final_url)
+                      if img_mime.startswith('image/') and len(img) > 1000:
+                          return img, img_mime, final_img_url
+                      errors.append(f'{candidate}: invalid MIME={img_mime}, bytes={len(img)}')
+                  except Exception as e:
+                      errors.append(f'{candidate}: {e}')
+              raise RuntimeError(f'No usable image found on {source_url}. candidates={len(candidates)}; ' + ' | '.join(errors[:4]))
+
+          downloaded = []
+          failures = []
+          for preferred_name, old_url, source_url in images:
+              try:
+                  data, mime, actual_url = real_image(source_url)
+                  ext = mimetypes.guess_extension(mime) or Path(preferred_name).suffix
+                  if ext == '.jpe':
+                      ext = '.jpg'
+                  name = Path(preferred_name).stem + ext
+                  # Use the source's actual format so the deployed Content-Type matches the bytes.
+                  path = out / name
+                  path.write_bytes(data)
+                  local_url = 'assets/images/' + name
+                  if old_url in page:
+                      page = page.replace(old_url, local_url)
+                  else:
+                      print(f'NOTE {preferred_name}: old URL already absent from index.html; local asset refreshed as {name}')
+                  downloaded.append((name, len(data), mime, actual_url))
+              except Exception as e:
+                  failures.append((preferred_name, str(e)))
+          for name, size, mime, source in downloaded:
+              print(f'DOWNLOADED {name}: {size} bytes; MIME={mime}; source={source}')
+          if failures:
+              for name, err in failures:
+                  print(f'FAILED {name}: {err}')
+              sys.exit('Image check failed. Leaving index.html unchanged rather than publishing broken image references.')
+          html_path.write_text(page, encoding='utf-8')
+          print(f'IMAGE_DOWNLOAD_COUNT={len(downloaded)}/{len(images)}')
           PY
-      - name: Commit downloaded files and local image paths
+      - name: Commit downloaded assets so Cloudflare Pages deploys the new version
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add index.html assets/images
           if git diff --cached --quiet; then
-            echo "No new image changes to commit."
+            echo "No changes to commit."
           else
-            git commit -m "chore: vendor downloaded case images [skip ci]"
+            git commit -m "Add local research image assets and references"
             git pull --rebase origin main
             git push
           fi
