@@ -37,7 +37,7 @@ jobs:
           echo "CF_TOKEN=$CF_TOKEN" >> "$GITHUB_ENV"
           echo "CF_ACCOUNT_ID=$CF_ACCOUNT_ID" >> "$GITHUB_ENV"
       - name: Inspect exact Pages project connection and build settings
-        if: ${{ env.CF_TOKEN_PRIMARY != '' || env.CF_TOKEN_ALT1 != '' || env.CF_TOKEN_ALT2 != '' || env.CF_TOKEN_ALT3 != '' }}
+        if: ${{ (env.CF_TOKEN_PRIMARY != '' || env.CF_TOKEN_ALT1 != '' || env.CF_TOKEN_ALT2 != '' || env.CF_TOKEN_ALT3 != '') && (env.CF_ACCOUNT_PRIMARY != '' || env.CF_ACCOUNT_ALT1 != '' || env.CF_ACCOUNT_ALT2 != '') }}
         run: |
           set -euo pipefail
           API="https://api.cloudflare.com/client/v4/accounts/${CF_ACCOUNT_ID}/pages/projects/${CF_PROJECT_NAME}"
@@ -77,7 +77,7 @@ jobs:
           print('DEPLOY_MODE=DIRECT_UPLOAD')
           PY
       - name: Deploy project files directly when this Pages project uses Direct Upload
-        if: ${{ env.CF_TOKEN_PRIMARY != '' || env.CF_TOKEN_ALT1 != '' || env.CF_TOKEN_ALT2 != '' || env.CF_TOKEN_ALT3 != '' }}
+        if: ${{ (env.CF_TOKEN_PRIMARY != '' || env.CF_TOKEN_ALT1 != '' || env.CF_TOKEN_ALT2 != '' || env.CF_TOKEN_ALT3 != '') && (env.CF_ACCOUNT_PRIMARY != '' || env.CF_ACCOUNT_ALT1 != '' || env.CF_ACCOUNT_ALT2 != '') }}
         run: |
           set -euo pipefail
           python - <<'PY'
