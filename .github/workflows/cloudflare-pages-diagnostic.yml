@@ -1,0 +1,89 @@
+name: Diagnose and deploy Cloudflare Pages
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'index.html'
+      - 'assets/images/**'
+      - '.github/workflows/cloudflare-pages-diagnostic.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  inspect-project:
+    runs-on: ubuntu-latest
+    env:
+      CF_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CF_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      CF_PROJECT_NAME: long-lived-ip-research
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check whether Cloudflare deployment credentials are configured
+        run: |
+          if [ -z "$CF_TOKEN" ]; then echo "CLOUDFLARE_API_TOKEN=missing"; else echo "CLOUDFLARE_API_TOKEN=present"; fi
+          if [ -z "$CF_ACCOUNT_ID" ]; then echo "CLOUDFLARE_ACCOUNT_ID=missing"; else echo "CLOUDFLARE_ACCOUNT_ID=present"; fi
+          if [ -z "$CF_TOKEN" ] || [ -z "$CF_ACCOUNT_ID" ]; then
+            echo "DIRECT_API_DEPLOY_UNAVAILABLE=true"
+            echo "The production Pages URL is not updating from the current GitHub main branch; API diagnostics require Cloudflare API token and account ID secrets."
+            exit 0
+          fi
+      - name: Inspect exact Pages project connection and build settings
+        if: ${{ env.CF_TOKEN != '' && env.CF_ACCOUNT_ID != '' }}
+        run: |
+          set -euo pipefail
+          API="https://api.cloudflare.com/client/v4/accounts/${CF_ACCOUNT_ID}/pages/projects/${CF_PROJECT_NAME}"
+          CODE=$(curl -sS --max-time 25 -o /tmp/cf-project.json -w '%{http_code}' "$API" -H "Authorization: Bearer ${CF_TOKEN}" -H "Content-Type: application/json")
+          echo "CLOUDFLARE_PROJECT_API_HTTP=$CODE"
+          python - <<'PY'
+          import json,sys
+          p=json.load(open('/tmp/cf-project.json',encoding='utf-8'))
+          print('CLOUDFLARE_API_SUCCESS=',p.get('success'))
+          if not p.get('success'):
+            print('CLOUDFLARE_API_ERRORS=',json.dumps(p.get('errors',[]),ensure_ascii=False))
+            sys.exit(0)
+          r=p.get('result') or {}
+          s=r.get('source') or {}
+          b=r.get('build_config') or {}
+          print('PROJECT_NAME=',r.get('name'))
+          print('PRODUCTION_BRANCH=',r.get('production_branch'))
+          print('SOURCE_TYPE=',s.get('type'))
+          print('SOURCE_OWNER=',(s.get('config') or {}).get('owner'))
+          print('SOURCE_REPO=',(s.get('config') or {}).get('repo_name'))
+          print('ROOT_DIR=',b.get('root_dir'))
+          print('BUILD_COMMAND=',repr(b.get('build_command')))
+          print('DESTINATION_DIR=',repr(b.get('destination_dir')))
+          print('LATEST_PRODUCTION_DEPLOYMENT=',json.dumps(r.get('latest_deployment') or {},ensure_ascii=False)[:1800])
+          PY
+          python - <<'PY'
+          import json,sys
+          p=json.load(open('/tmp/cf-project.json',encoding='utf-8'))
+          if not p.get('success') or not p.get('result'):
+            sys.exit(0)
+          r=p['result']
+          source=r.get('source') or {}
+          if source.get('type') in ('github','gitlab'):
+            print('DEPLOY_MODE=GIT_INTEGRATION')
+            print('No direct upload attempted; this project is attached to Git and the returned root/output settings must be corrected first if needed.')
+            sys.exit(0)
+          print('DEPLOY_MODE=DIRECT_UPLOAD')
+          PY
+      - name: Deploy project files directly when this Pages project uses Direct Upload
+        if: ${{ env.CF_TOKEN != '' && env.CF_ACCOUNT_ID != '' }}
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          p=json.load(open('/tmp/cf-project.json',encoding='utf-8'))
+          r=p.get('result') or {}
+          source=r.get('source') or {}
+          direct = bool(p.get('success') and r and source.get('type') not in ('github','gitlab'))
+          open('/tmp/is-direct-upload','w').write('yes' if direct else 'no')
+          PY
+          if [ "$(cat /tmp/is-direct-upload)" != "yes" ]; then
+            echo "Skipping direct upload to avoid pushing to a Git-integrated project."
+            exit 0
+          fi
+          mkdir -p /tmp/pages-output/assets/images
+          cp index.html /tmp/pages-output/index.html
+          cp assets/images/* /tmp/pages-output/assets/images/
+          npx --yes wrangler@4 pages deploy /tmp/pages-output --project-name "$CF_PROJECT_NAME" --branch main
