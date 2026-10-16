@@ -49,7 +49,7 @@ jobs:
                 let reportFrame=null;
                 for(const frame of page.frames()){
                   const text=await frame.locator('body').innerText().catch(()=> '');
-                  if(text.includes('長青 IP 研究室')&&text.includes('部署檢查版｜2026-10-16')){reportFrame=frame;break;}
+                  if(text.includes('長青 IP 研究室')&&text.includes('成功機制')&&text.includes('蠟筆小新')){reportFrame=frame;break;}
                 }
                 if(!reportFrame){console.log('HOST_NO_REPORT_DOM',name); await page.close();continue;}
                 const imgs=reportFrame.locator('img');
