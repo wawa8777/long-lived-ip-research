@@ -1,11 +1,5 @@
 name: Probe Cloudflare Pages production and branch preview
 on:
-  push:
-    branches: [main]
-    paths:
-      - '.github/workflows/probe-cloudflare-preview.yml'
-      - 'index.html'
-      - 'assets/images/**'
   workflow_dispatch:
 permissions:
   contents: read
