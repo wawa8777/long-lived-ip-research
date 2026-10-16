@@ -1,19 +1,10 @@
 name: Verify production Pages images
 on:
-  push:
-    branches: [main]
-    paths:
-      - 'index.html'
-      - '.github/workflows/verify-pages-deploy.yml'
-  workflow_run:
-    workflows: ["Vendor real case images"]
-    types: [completed]
-    branches: [main]
+  workflow_dispatch:
 permissions:
   contents: read
 jobs:
   verify-live-site:
-    if: ${{ github.event_name == 'push' || github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
     steps:
       - name: Diagnose production response and confirm HTML is live
