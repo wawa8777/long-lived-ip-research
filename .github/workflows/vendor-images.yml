@@ -105,7 +105,7 @@ jobs:
                   path.write_bytes(data)
                   local_url = 'assets/images/' + name
                   # Rewrite only an <img src> attribute. Preserve the clickable original-source links in the article.
-                  pattern = re.compile(r'(<img\\b[^>]*\\bsrc=["\\'])' + re.escape(old_url) + r'(["\\'])', re.I)
+                  pattern = re.compile(r'(<img\b[^>]*\bsrc=["\'])' + re.escape(old_url) + r'(["\'])', re.I)
                   page, replacements = pattern.subn(lambda m: m.group(1) + local_url + m.group(2), page)
                   if replacements:
                       print(f'UPDATED_IMAGE_SRC {preferred_name}: {replacements}')
