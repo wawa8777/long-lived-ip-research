@@ -43,14 +43,19 @@ jobs:
             fi
             sleep 6
           done
+          echo "live_html_pass=$PASS" >> "$GITHUB_OUTPUT"
           if [ "$PASS" -ne 1 ]; then
             echo "FINAL_RESPONSE_DIAGNOSTICS:"
             [ ! -f /tmp/live-index.html ] || {
               grep -o '<title>[^<]*' /tmp/live-index.html | head -1 || true
+              echo "Image src attributes served by the current production HTML:"
+              grep -oE 'src="[^"]+"' /tmp/live-index.html | head -20 || true
+              echo "Known image paths found in production HTML:"
               grep -o 'assets/images/[^" ]*' /tmp/live-index.html | sort -u | head -20 || true
-              head -c 700 /tmp/live-index.html || true
+              echo "Source link count:"
+              grep -o '原始圖片網址' /tmp/live-index.html | wc -l || true
             }
-            exit 1
+            echo "Production HTML is stale; continuing to test individual asset URLs for diagnosis."
           fi
       - name: Verify all seven public image URLs return image content
         run: |
