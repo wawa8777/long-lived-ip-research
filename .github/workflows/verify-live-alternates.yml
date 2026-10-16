@@ -28,10 +28,12 @@ jobs:
           cat > test-live-hosts.cjs <<'JS'
           const {chromium}=require('playwright');
           const targets=[
+            ['HTML Preview via GitHub blob','https://htmlpreview.github.io/?https://github.com/wawa8777/long-lived-ip-research/blob/main/index.html'],
+            ['HTML Preview via raw URL','https://htmlpreview.github.io/?https://raw.githubusercontent.com/wawa8777/long-lived-ip-research/main/index.html'],
+            ['rawcdn.githack','https://rawcdn.githack.com/wawa8777/long-lived-ip-research/main/index.html'],
+            ['GitHub Pages default URL','https://wawa8777.github.io/long-lived-ip-research/'],
             ['Statically CDN','https://cdn.statically.io/gh/wawa8777/long-lived-ip-research/main/index.html'],
             ['jsDelivr CDN','https://cdn.jsdelivr.net/gh/wawa8777/long-lived-ip-research@main/index.html'],
-            ['HTML Preview','https://htmlpreview.github.io/?https://github.com/wawa8777/long-lived-ip-research/blob/main/index.html'],
-            ['GitHub Pages default URL','https://wawa8777.github.io/long-lived-ip-research/'],
           ];
           (async()=>{
             const browser=await chromium.launch({headless:true});
@@ -39,7 +41,7 @@ jobs:
             for(let i=0;i<targets.length;i++){
               const [name,base]=targets[i];
               const page=await browser.newPage({viewport:{width:1440,height:1000},deviceScaleFactor:1});
-              const url=base+(base.includes('?')?'&':'?')+'visual-check='+Date.now();
+              const url=name.startsWith('HTML Preview')||name==='rawcdn.githack'?base:base+(base.includes('?')?'&':'?')+'visual-check='+Date.now();
               try{
                 const response=await page.goto(url,{waitUntil:'domcontentloaded',timeout:45000});
                 await page.waitForTimeout(2500);
