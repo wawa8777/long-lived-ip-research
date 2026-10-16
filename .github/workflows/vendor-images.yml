@@ -1,0 +1,70 @@
+name: Vendor real case images
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'index.html'
+      - '.github/workflows/vendor-images.yml'
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  download-and-vendor:
+    if: "!contains(github.event.head_commit.message, '[skip ci]')"
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Download real image files and point site to local copies
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          from urllib.request import Request, urlopen
+          import re, sys
+          root = Path('.')
+          html_path = root / 'index.html'
+          html = html_path.read_text(encoding='utf-8')
+          out = root / 'assets' / 'images'
+          out.mkdir(parents=True, exist_ok=True)
+          images = [
+            ('shinchan.png', 'https://www.tv-asahi.co.jp/shinchan/common-img/main_sp.png'),
+            ('one-piece.jpg', 'https://one-piece.com/o/assets/images/anime/character/data/giolla/img.jpg'),
+            ('pokemon.png', 'https://sg.portal-pokemon.com/play/resources/pokedex/img/pm/2b3f6ff00db7a1efae21d85cfb8995eaff2da8d8.png'),
+            ('hello-kitty.jpg', 'https://spice.eplus.jp/images/BoDsdSSRojSPpe0TRY0mnLdmAa3xrhqKzEbP22SJxzX2ayIGy4DDrkJ393WAWNpG/'),
+            ('snoopy.jpg', 'https://ian.marieclaire.com.tw/assets/mc/202312/658A7F4B20D531703575371.jpeg?format=jpg&t=sc&w=1200%2C675'),
+            ('ultraman.jpg', 'https://www.bizhankook.com/upload/bk/article/201611/thumb/12014-19044-sampleM.jpg'),
+            ('simpsons.jpg', 'https://sire-media-star.techops.disn.io/generic/photogallery-photo/64/160994.custom.jpg'),
+          ]
+          success = 0
+          for name, url in images:
+            path = out / name
+            try:
+              req = Request(url, headers={'User-Agent':'Mozilla/5.0 (compatible; ResearchSite/1.0)'})
+              with urlopen(req, timeout=30) as response:
+                data = response.read()
+                mime = response.headers.get('Content-Type','').lower()
+              if len(data) < 1000 or not mime.startswith('image/'):
+                raise ValueError(f'not a valid image: MIME={mime}, bytes={len(data)}')
+              path.write_bytes(data)
+              html = html.replace(url, 'assets/images/' + name)
+              print(f'DOWNLOADED {name}: {len(data)} bytes ({mime})')
+              success += 1
+            except Exception as e:
+              print(f'FAILED {name}: {e}')
+          # Keep any unavailable source URL intact, and never claim that failed downloads are local.
+          html_path.write_text(html, encoding='utf-8')
+          print(f'IMAGE_DOWNLOAD_COUNT={success}/{len(images)}')
+          if success == 0:
+            sys.exit('No images downloaded; refusing to commit a false success.')
+          PY
+      - name: Commit downloaded files and local image paths
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add index.html assets/images
+          if git diff --cached --quiet; then
+            echo "No new image changes to commit."
+          else
+            git commit -m "chore: vendor downloaded case images [skip ci]"
+            git push
+          fi
