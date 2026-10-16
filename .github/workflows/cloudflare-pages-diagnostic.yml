@@ -13,22 +13,31 @@ jobs:
   inspect-project:
     runs-on: ubuntu-latest
     env:
-      CF_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-      CF_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      CF_TOKEN_PRIMARY: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CF_TOKEN_ALT1: ${{ secrets.CF_API_TOKEN }}
+      CF_TOKEN_ALT2: ${{ secrets.CLOUDFLARE_TOKEN }}
+      CF_TOKEN_ALT3: ${{ secrets.CLOUDFLARE_API_KEY }}
+      CF_ACCOUNT_PRIMARY: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      CF_ACCOUNT_ALT1: ${{ secrets.CF_ACCOUNT_ID }}
+      CF_ACCOUNT_ALT2: ${{ secrets.CF_ACCOUNT }}
       CF_PROJECT_NAME: long-lived-ip-research
     steps:
       - uses: actions/checkout@v4
       - name: Check whether Cloudflare deployment credentials are configured
         run: |
-          if [ -z "$CF_TOKEN" ]; then echo "CLOUDFLARE_API_TOKEN=missing"; else echo "CLOUDFLARE_API_TOKEN=present"; fi
-          if [ -z "$CF_ACCOUNT_ID" ]; then echo "CLOUDFLARE_ACCOUNT_ID=missing"; else echo "CLOUDFLARE_ACCOUNT_ID=present"; fi
+          CF_TOKEN="${CF_TOKEN_PRIMARY:-${CF_TOKEN_ALT1:-${CF_TOKEN_ALT2:-${CF_TOKEN_ALT3:-}}}}"
+          CF_ACCOUNT_ID="${CF_ACCOUNT_PRIMARY:-${CF_ACCOUNT_ALT1:-${CF_ACCOUNT_ALT2:-}}}"
+          if [ -n "$CF_TOKEN" ]; then echo "CLOUDFLARE_TOKEN_CREDENTIAL=present"; else echo "CLOUDFLARE_TOKEN_CREDENTIAL=missing"; fi
+          if [ -n "$CF_ACCOUNT_ID" ]; then echo "CLOUDFLARE_ACCOUNT_CREDENTIAL=present"; else echo "CLOUDFLARE_ACCOUNT_CREDENTIAL=missing"; fi
           if [ -z "$CF_TOKEN" ] || [ -z "$CF_ACCOUNT_ID" ]; then
             echo "DIRECT_API_DEPLOY_UNAVAILABLE=true"
-            echo "The production Pages URL is not updating from the current GitHub main branch; API diagnostics require Cloudflare API token and account ID secrets."
+            echo "Cloudflare API diagnostics require a token and account ID configured as repository Actions secrets."
             exit 0
           fi
+          echo "CF_TOKEN=$CF_TOKEN" >> "$GITHUB_ENV"
+          echo "CF_ACCOUNT_ID=$CF_ACCOUNT_ID" >> "$GITHUB_ENV"
       - name: Inspect exact Pages project connection and build settings
-        if: ${{ env.CF_TOKEN != '' && env.CF_ACCOUNT_ID != '' }}
+        if: ${{ env.CF_TOKEN_PRIMARY != '' || env.CF_TOKEN_ALT1 != '' || env.CF_TOKEN_ALT2 != '' || env.CF_TOKEN_ALT3 != '' }}
         run: |
           set -euo pipefail
           API="https://api.cloudflare.com/client/v4/accounts/${CF_ACCOUNT_ID}/pages/projects/${CF_PROJECT_NAME}"
@@ -68,7 +77,7 @@ jobs:
           print('DEPLOY_MODE=DIRECT_UPLOAD')
           PY
       - name: Deploy project files directly when this Pages project uses Direct Upload
-        if: ${{ env.CF_TOKEN != '' && env.CF_ACCOUNT_ID != '' }}
+        if: ${{ env.CF_TOKEN_PRIMARY != '' || env.CF_TOKEN_ALT1 != '' || env.CF_TOKEN_ALT2 != '' || env.CF_TOKEN_ALT3 != '' }}
         run: |
           set -euo pipefail
           python - <<'PY'
