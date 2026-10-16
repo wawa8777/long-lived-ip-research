@@ -1,0 +1,45 @@
+name: Verify public HTML mirror
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'index.html'
+      - 'assets/**'
+      - '.github/workflows/verify-public-mirror.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  verify-mirror:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check rendered HTML mirror
+        run: |
+          set -euo pipefail
+          URL="https://raw.githack.com/wawa8777/long-lived-ip-research/main/index.html"
+          CODE=$(curl -sSL --max-time 30 -o /tmp/mirror.html -w '%{http_code}' "$URL?verify=${GITHUB_RUN_ID}")
+          TYPE=$(curl -sSI --max-time 30 "$URL?verify=${GITHUB_RUN_ID}" | tr -d '\r' | awk 'BEGIN{IGNORECASE=1} /^content-type:/{print $2}' | tail -1)
+          echo "MIRROR_HTML_HTTP=$CODE"
+          echo "MIRROR_HTML_CONTENT_TYPE=$TYPE"
+          echo "MIRROR_HTML_BYTES=$(wc -c < /tmp/mirror.html)"
+          grep -Fq '部署檢查版｜2026-10-16' /tmp/mirror.html
+          for path in assets/images/one-piece.jpg assets/images/pokemon.png assets/images/hello-kitty.jpg assets/images/snoopy.jpg assets/images/ultraman.png assets/images/simpsons.jpg assets/images/shinchan.png; do
+            grep -Fq "$path" /tmp/mirror.html
+          done
+          echo "MIRROR_HTML_REFERENCES_CONFIRMED"
+      - name: Verify relative image URLs are served by the mirror
+        run: |
+          set -euo pipefail
+          BASE="https://raw.githack.com/wawa8777/long-lived-ip-research/main"
+          for path in assets/images/one-piece.jpg assets/images/pokemon.png assets/images/hello-kitty.jpg assets/images/snoopy.jpg assets/images/ultraman.png assets/images/simpsons.jpg assets/images/shinchan.png; do
+            RESULT=$(curl -sSL --max-time 30 -o /dev/null -w '%{http_code}|%{content_type}|%{size_download}' "$BASE/$path?verify=${GITHUB_RUN_ID}")
+            CODE="${RESULT%%|*}"
+            REST="${RESULT#*|}"
+            TYPE="${REST%%|*}"
+            SIZE="${REST##*|}"
+            echo "$path => HTTP=$CODE MIME=$TYPE BYTES=$SIZE"
+            [ "$CODE" = "200" ]
+            case "$TYPE" in image/*) ;; *) echo "Not an image content type: $TYPE"; exit 1;; esac
+            [ "$SIZE" -gt 1000 ]
+          done
+          echo "PUBLIC_MIRROR_AND_SEVEN_IMAGES_CONFIRMED"
