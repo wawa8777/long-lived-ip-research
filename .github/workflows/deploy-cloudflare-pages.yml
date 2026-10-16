@@ -1,0 +1,67 @@
+name: Deploy Cloudflare Pages
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'index.html'
+      - 'assets/images/**'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger Cloudflare Pages production deployment
+        env:
+          PAGES_DEPLOY_HOOK: ${{ secrets.CLOUDFLARE_PAGES_DEPLOY_HOOK }}
+        run: |
+          set -euo pipefail
+          if [ -z "${PAGES_DEPLOY_HOOK:-}" ]; then
+            echo "::warning::Missing repository secret CLOUDFLARE_PAGES_DEPLOY_HOOK. Add it in GitHub Settings > Secrets and variables > Actions, then run this workflow manually."
+            exit 0
+          fi
+          echo "::add-mask::${PAGES_DEPLOY_HOOK}"
+          status=$(curl -sS --max-time 30 -X POST -o /tmp/deploy-hook-response.txt -w '%{http_code}' "$PAGES_DEPLOY_HOOK")
+          echo "CLOUDFLARE_DEPLOY_HOOK_HTTP=$status"
+          if [ "$status" -lt 200 ] || [ "$status" -ge 300 ]; then
+            echo "::error::Cloudflare deploy hook returned HTTP $status."
+            exit 1
+          fi
+          echo "Cloudflare accepted the deployment trigger."
+      - name: Verify the production site serves local report images
+        env:
+          PAGES_DEPLOY_HOOK: ${{ secrets.CLOUDFLARE_PAGES_DEPLOY_HOOK }}
+        run: |
+          set -euo pipefail
+          if [ -z "${PAGES_DEPLOY_HOOK:-}" ]; then
+            echo "Skipped live verification because the deploy hook secret is not configured."
+            exit 0
+          fi
+          SITE="https://long-lived-ip-research.pages.dev/"
+          EXPECTED="assets/images/one-piece.jpg assets/images/pokemon.png assets/images/hello-kitty.jpg assets/images/snoopy.jpg assets/images/ultraman.png assets/images/simpsons.jpg assets/images/shinchan.png"
+          for attempt in $(seq 1 18); do
+            status=$(curl -sSL --max-time 25 -w '%{http_code}' "${SITE}?deploy-check=${GITHUB_RUN_ID}-${attempt}" -o /tmp/live-index.html || true)
+            missing=""
+            for item in $EXPECTED; do
+              grep -Fq "$item" /tmp/live-index.html 2>/dev/null || missing="$missing $item"
+            done
+            source_count=$(grep -o '原始圖片網址' /tmp/live-index.html 2>/dev/null | wc -l || true)
+            echo "VERIFY_ATTEMPT=$attempt HTTP=$status MISSING_ASSET_PATHS=$missing SOURCE_LINK_LABELS=$source_count"
+            if [ "$status" = "200" ] && [ -z "$missing" ] && [ "$source_count" -ge 7 ]; then
+              echo "PRODUCTION_HTML_VERIFIED=true"
+              for item in $EXPECTED; do
+                image_status=$(curl -sSL --max-time 20 -o /dev/null -w '%{http_code}' "${SITE%/}/$item?deploy-check=${GITHUB_RUN_ID}" || true)
+                echo "IMAGE_HTTP=$image_status PATH=$item"
+                if [ "$image_status" != "200" ]; then
+                  echo "::error::Image asset did not return HTTP 200: $item"
+                  exit 1
+                fi
+              done
+              echo "CLOUDFLARE_DEPLOYMENT_VERIFIED=true"
+              exit 0
+            fi
+            sleep 10
+          done
+          echo "::error::Cloudflare accepted the hook but the production domain did not serve the expected HTML and image paths before timeout."
+          exit 1
