@@ -1,32 +1,30 @@
 # 部署 Skill 02：與原版比較
 
 ## 原版（基準）
-
-原版操作手冊：`NEW_SITE_PLAYBOOK.md`  
-原版 starter：`site-starter/`  
-原版部署工作流：`.github/workflows/deploy-cloudflare-pages.yml`
+- 原版操作手冊：`NEW_SITE_PLAYBOOK.md`
+- 原版 starter：`site-starter/`
+- 原版部署工作流：`.github/workflows/deploy-cloudflare-pages.yml`
 
 原版重點是新網站建立、Cloudflare Pages 設定、Deploy Hook、基本正式網址驗證與操作口令。
 
-## Skill 02（平行版本）
+## Skill 02（平行實驗版）
+- 入口：`deployment-skill-02/SKILL.md`
+- 驗收清單：`deployment-skill-02/ACCEPTANCE-CHECKLIST.md`
 
-入口：`deployment-skill-02/SKILL.md`
+在原有規範上加強：
+- 從需求到正式網址驗收的端到端閉環。
+- 每次新網站都檢查部署 workflow 是否涵蓋變更檔案。
+- 防止沿用錯誤網站的硬編碼網址、專案名稱、分支與資產清單。
+- 區分 Git push、Deploy Hook 接受、平台部署完成與 live site 驗收。
+- 優先 preview，再 production；部署後實際驗證 HTML、資產、互動與手機／桌面版。
+- 失敗時根據日誌分類、修復、重跑測試並再次驗收。
+- 用 VERIFIED LIVE、DEPLOYED — SITE CHECK PENDING 等狀態避免模糊報喜。
+- 保留原版、保護 secrets、避免未授權付費或不可逆操作。
 
-新增或強化：
-- 專案辨識、技術架構與部署模式檢查。
-- 修改前定義驗收標準、保留原有行為。
-- 修改差異檢查與最小變更原則。
-- 按專案情況執行建置、測試、連結、圖片、響應式與瀏覽器驗收。
-- 將 PASSED / FAILED / NOT RUN / BLOCKED 分開回報。
-- 區分 Deploy Hook 已接受請求與正式部署已完成。
-- 失敗診斷、有限度修復、重跑測試與安全回滾評估。
-- 交付 commit、Actions 證據、正式網站驗證與未完成事項。
-- 明確規定不覆蓋原版、不要求使用者在聊天貼出秘密、不擅自執行付費或不可逆操作。
-
-## 比較規則
-
-1. 原版仍是基準；Skill 02 是獨立新增的實驗版本。
-2. 不要將 Skill 02 的規則自動合併回原版。
-3. 使用者可分別說「部署skill」或「部署skill02」指定版本。
-4. 在完成真實專案任務後，依實際證據比較完成度、失敗處理、測試覆蓋率與使用者介入次數；不可只因規格更長就宣稱 Skill 02 更好。
-5. 此資料夾是 Skill 的可讀規格/封裝起點。若要在其他執行環境自動載入，仍須將其安裝到該環境支援的 Skills 目錄或系統。
+## 比較與驗證規則
+1. 原版仍是基準；Skill 02 是獨立新增的平行版本。
+2. 不要自動將 Skill 02 合併回原版。
+3. 「部署skill」指定原版；「部署skill02」指定 Skill 02。
+4. 不因規格更完整就直接宣稱可靠性更高；必須透過真實新網站測試，記錄失敗率、測試覆蓋、使用者介入次數及從提交到正式驗收的完整證據。
+5. 本資料夾是可讀規格與版本封裝，並不自動成為所有 ChatGPT 對話都會載入的全域 Skill；需由執行環境支援並安裝才會自動載入。
+6. 本次優化是規格與驗收流程更新，不等於已經用全新網站完成端到端實測；在完成實測前不得宣稱「保證無阻自動部署」。
