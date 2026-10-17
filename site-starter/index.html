@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f4f1eb">
+  <meta name="description" content="A clean, responsive website starter.">
+  <title>新網站｜首頁</title>
+  <style>
+    :root { color-scheme: light; --paper:#f4f1eb; --ink:#20211f; --muted:#66675f; --line:#d9d6ce; --accent:#315e52; }
+    * { box-sizing:border-box; }
+    html { scroll-behavior:smooth; }
+    body { margin:0; background:var(--paper); color:var(--ink); font-family:ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; line-height:1.65; }
+    a { color:inherit; }
+    .wrap { width:min(1120px, calc(100% - 40px)); margin-inline:auto; }
+    header { padding:24px 0; border-bottom:1px solid var(--line); }
+    nav { display:flex; align-items:center; justify-content:space-between; gap:20px; }
+    .brand { font-size:1rem; font-weight:750; letter-spacing:.08em; text-decoration:none; }
+    .nav-link { color:var(--muted); text-decoration:none; font-size:.92rem; }
+    main { padding:clamp(64px, 12vw, 140px) 0 88px; }
+    .eyebrow { color:var(--accent); font-size:.78rem; font-weight:750; letter-spacing:.16em; text-transform:uppercase; }
+    h1 { max-width:850px; margin:18px 0 22px; font-size:clamp(2.8rem, 8vw, 6.8rem); line-height:.98; letter-spacing:-.065em; font-weight:650; }
+    .intro { max-width:620px; color:var(--muted); font-size:clamp(1.05rem,2vw,1.25rem); }
+    .actions { display:flex; flex-wrap:wrap; gap:12px; margin-top:34px; }
+    .button { display:inline-flex; align-items:center; justify-content:center; min-height:48px; padding:0 20px; border:1px solid var(--ink); border-radius:999px; text-decoration:none; font-weight:650; }
+    .button.primary { background:var(--ink); color:white; }
+    section { padding:32px 0 72px; border-top:1px solid var(--line); }
+    h2 { font-size:clamp(1.6rem,4vw,2.6rem); letter-spacing:-.04em; }
+    .note { max-width:680px; color:var(--muted); }
+    footer { padding:24px 0 40px; border-top:1px solid var(--line); color:var(--muted); font-size:.88rem; }
+    @media (max-width:520px) { .wrap { width:min(100% - 28px,1120px); } nav { align-items:flex-start; } .nav-link { max-width:140px; text-align:right; } .actions .button { width:100%; } }
+  </style>
+</head>
+<body>
+  <header>
+    <nav class="wrap" aria-label="主要導覽">
+      <a class="brand" href="#" aria-label="回到首頁">YOUR BRAND</a>
+      <a class="nav-link" href="#about">關於這個專案 ↘</a>
+    </nav>
+  </header>
+  <main class="wrap">
+    <p class="eyebrow">A new beginning</p>
+    <h1>把你的想法，<br>變成真正的網站。</h1>
+    <p class="intro">這是一個簡潔、支援手機與桌面的網站起點。接下來可以依你的品牌、內容與功能需求，逐步打造完整體驗。</p>
+    <div class="actions">
+      <a class="button primary" href="#about">了解更多</a>
+      <a class="button" href="mailto:hello@example.com">聯絡我們</a>
+    </div>
+  </main>
+  <section id="about">
+    <div class="wrap">
+      <p class="eyebrow">Project foundation</p>
+      <h2>從清楚的內容開始。</h2>
+      <p class="note">替換品牌名稱、文案、聯絡方式與連結，再依實際需求加入作品集、商品、服務、表單或其他功能。發布前請移除示範聯絡資訊並完成測試。</p>
+    </div>
+  </section>
+  <footer><div class="wrap">© <span id="year"></span> YOUR BRAND · Built for a responsive web.</div></footer>
+  <script>document.getElementById("year").textContent = new Date().getFullYear();</script>
+</body>
+</html>
